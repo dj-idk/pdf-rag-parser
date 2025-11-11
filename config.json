@@ -1,0 +1,34 @@
+{
+  "extraction": {
+    "library": "pymupdf",
+    "extract_metadata": true
+  },
+  "structure": {
+    "use_bookmarks": true,
+    "use_heuristics": true,
+    "use_regex": true,
+    "font_size_threshold": 14.0,
+    "heading_isolation_threshold": 0.7
+  },
+  "cleaning": {
+    "exclude_sections": ["Index", "Bibliography", "Appendix", "References"],
+    "exclude_patterns": ["[Pp]age \\d+", "^\\s*$", "^\\s*-{3,}\\s*$"],
+    "crop_top_percent": 0.0,
+    "crop_bottom_percent": 5.0,
+    "crop_left_percent": 0.0,
+    "crop_right_percent": 0.0
+  },
+  "chunking": {
+    "max_chunk_size": 800,
+    "chunk_overlap": 0,
+    "split_by_paragraph": true,
+    "split_by_sentence": true,
+    "split_by_word": true
+  },
+  "output": {
+    "output_dir": "output/",
+    "create_metadata": true,
+    "create_index": true,
+    "preserve_structure": true
+  }
+}
