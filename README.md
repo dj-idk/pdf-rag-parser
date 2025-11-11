@@ -367,38 +367,6 @@ pdf-rag-parser/
 
 ---
 
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit changes (`git commit -am 'Add your feature'`)
-4. Push to the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
-
----
-
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-## Support & Troubleshooting
-
-### Common Issues
-
-**Q: "No text extracted from PDF"**
-
-- A: Your PDF may be scanned (image-based). This version requires digital PDFs with selectable text.
-
-**Q: "Structure detection not working"**
-
-- A: Try enabling all detection methods in `config.json`: `use_bookmarks`, `use_heuristics`, and `use_regex`.
-
-**Q: "Output folders not created"**
-
-- A: Ensure the output directory path is valid and you have write permissions.
-
-For more help, open an issue on the repository.
+This project is not licensed. Feel free to use it however you want.
