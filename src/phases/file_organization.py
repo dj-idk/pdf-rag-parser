@@ -1,16 +1,13 @@
 """
-Phase 5: File Organization & Output
-
-Organizes chunks into a structured folder hierarchy with metadata tracking.
+Phase 4: File Organization & Output
+Saves chunks in an organized folder structure with metadata.
 """
 
-import json
 import logging
-import re
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+import json
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
-
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -27,41 +24,40 @@ class FileOrganizationMetadata:
     chunks_by_chapter: Dict[str, int] = None
 
     def __post_init__(self):
-        """Initialize default values."""
         if self.folder_structure is None:
             self.folder_structure = {}
         if self.chunks_by_chapter is None:
             self.chunks_by_chapter = {}
 
 
-class FileOrganizationPhase:
+class FileOrganizer:
     """Handles file organization and output generation."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Optional[Dict] = None):
         """
-        Initialize file organization phase.
+        Initialize the file organizer.
 
         Args:
-            config: Configuration dictionary for output phase
+            config: Configuration dictionary with output settings
         """
-        self.config = config
-        self.create_metadata = config.get("create_metadata", True)
-        self.create_index = config.get("create_index", True)
-        self.preserve_structure = config.get("preserve_structure", True)
+        self.config = config or {}
+        self.create_metadata = self.config.get("create_metadata", True)
+        self.create_index = self.config.get("create_index", True)
+        self.preserve_structure = self.config.get("preserve_structure", True)
 
     def run(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: List[Any],
         output_dir: str,
-        structure_metadata: Optional[Dict[str, Any]] = None,
+        chapters_config: Optional[List[Dict]] = None,
     ) -> FileOrganizationMetadata:
         """
-        Organize chunks into folder structure and create metadata.
+        Run the file organization phase.
 
         Args:
-            chunks: List of chunk dictionaries
+            chunks: List of Chunk objects from chunking phase
             output_dir: Base output directory
-            structure_metadata: Metadata from structure analysis phase
+            chapters_config: Optional list of chapter configurations
 
         Returns:
             FileOrganizationMetadata instance
@@ -72,7 +68,7 @@ class FileOrganizationPhase:
         output_path.mkdir(parents=True, exist_ok=True)
 
         # Build folder structure
-        folder_structure = self._build_folder_structure(chunks, structure_metadata)
+        folder_structure = self._build_folder_structure(chunks, chapters_config)
 
         # Save chunks to organized folders
         total_chunks_saved = self._save_chunks_to_folders(
@@ -87,7 +83,7 @@ class FileOrganizationPhase:
         index_file_path = ""
         if self.create_index:
             index_file_path = self._create_index_file(
-                chunks, output_path, folder_structure, structure_metadata
+                chunks, output_path, folder_structure, chapters_config
             )
 
         metadata = FileOrganizationMetadata(
@@ -108,269 +104,250 @@ class FileOrganizationPhase:
 
     def _build_folder_structure(
         self,
-        chunks: List[Dict[str, Any]],
-        structure_metadata: Optional[Dict[str, Any]] = None,
+        chunks: List[Any],
+        chapters_config: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
-        """
-        Build hierarchical folder structure from chunks.
-
-        Args:
-            chunks: List of chunk dictionaries
-            structure_metadata: Metadata from structure analysis
-
-        Returns:
-            Dictionary representing folder structure
-        """
+        """Build the folder structure from chunks and chapter config."""
         structure = {}
 
-        for chunk in chunks:
-            part = chunk.get("part", "Uncategorized")
-            chapter = chunk.get("chapter", "Uncategorized")
+        if not chapters_config:
+            # Build structure from chunks
+            for chunk in chunks:
+                part = chunk.source_part or "Unknown"
+                chapter = chunk.source_chapter or "Unknown"
 
-            if part not in structure:
-                structure[part] = {"chapters": {}}
+                if part not in structure:
+                    structure[part] = {"chapters": {}}
 
-            if chapter not in structure[part]["chapters"]:
-                structure[part]["chapters"][chapter] = {
-                    "chunks": [],
-                    "pages": set(),
-                    "total_characters": 0,
-                }
+                if chapter not in structure[part]["chapters"]:
+                    structure[part]["chapters"][chapter] = []
 
-            structure[part]["chapters"][chapter]["chunks"].append(chunk)
-            structure[part]["chapters"][chapter]["total_characters"] += len(
-                chunk.get("content", "")
-            )
+                structure[part]["chapters"][chapter].append(chunk.chunk_num)
+        else:
+            # Build structure from config
+            for chapter_config in chapters_config:
+                # Convert dataclass to dict if needed
+                if hasattr(chapter_config, "__dataclass_fields__"):
+                    chapter_config = asdict(chapter_config)
 
-            # Track pages
-            if "page_num" in chunk:
-                structure[part]["chapters"][chapter]["pages"].add(chunk["page_num"])
+                part = chapter_config.get("part", "Unknown")
+                chapter = chapter_config.get("name", "Unknown")
+
+                if part not in structure:
+                    structure[part] = {"chapters": {}}
+
+                if chapter not in structure[part]["chapters"]:
+                    structure[part]["chapters"][chapter] = []
 
         return structure
 
     def _save_chunks_to_folders(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: List[Any],
         output_path: Path,
         folder_structure: Dict[str, Any],
     ) -> int:
-        """
-        Save chunks to organized folder structure.
-
-        Args:
-            chunks: List of chunk dictionaries
-            output_path: Base output directory path
-            folder_structure: Folder structure dictionary
-
-        Returns:
-            Total number of chunks saved
-        """
+        """Save chunks to organized folder structure."""
         total_saved = 0
 
-        for part_name, part_data in folder_structure.items():
-            part_folder = self._sanitize_folder_name(part_name)
-            part_path = output_path / part_folder
+        for chunk in chunks:
+            part = chunk.source_part or "Unknown"
+            chapter = chunk.source_chapter or "Unknown"
 
-            for chapter_name, chapter_data in part_data["chapters"].items():
-                chapter_folder = self._sanitize_folder_name(chapter_name)
-                chapter_path = part_path / chapter_folder
-                chapter_path.mkdir(parents=True, exist_ok=True)
+            # Sanitize folder names
+            part_folder = self._sanitize_folder_name(part)
+            chapter_folder = self._sanitize_folder_name(chapter)
 
-                # Save chunks for this chapter
-                for idx, chunk in enumerate(chapter_data["chunks"], 1):
-                    chunk_filename = f"chunk_{idx:03d}.txt"
-                    chunk_file_path = chapter_path / chunk_filename
+            # Create folder path
+            chapter_path = output_path / part_folder / chapter_folder
+            chapter_path.mkdir(parents=True, exist_ok=True)
 
-                    with open(chunk_file_path, "w", encoding="utf-8") as f:
-                        f.write(chunk.get("content", ""))
+            # Save chunk file
+            chunk_file = chapter_path / f"chunk_{chunk.chunk_num:04d}.txt"
 
-                    total_saved += 1
+            try:
+                with open(chunk_file, "w", encoding="utf-8") as f:
+                    f.write(chunk.content)
+                total_saved += 1
+            except Exception as e:
+                logger.error(f"Failed to save chunk {chunk.chunk_num}: {e}")
 
         return total_saved
 
     def _create_chapter_metadata(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: List[Any],
         output_path: Path,
         folder_structure: Dict[str, Any],
     ) -> None:
-        """
-        Create metadata.json file for each chapter.
+        """Create metadata.json files for each chapter."""
+        chapter_chunks = {}
 
-        Args:
-            chunks: List of chunk dictionaries
-            output_path: Base output directory path
-            folder_structure: Folder structure dictionary
-        """
-        for part_name, part_data in folder_structure.items():
-            part_folder = self._sanitize_folder_name(part_name)
-            part_path = output_path / part_folder
+        # Group chunks by chapter
+        for chunk in chunks:
+            chapter = chunk.source_chapter or "Unknown"
+            if chapter not in chapter_chunks:
+                chapter_chunks[chapter] = []
+            chapter_chunks[chapter].append(chunk)
 
-            for chapter_name, chapter_data in part_data["chapters"].items():
-                chapter_folder = self._sanitize_folder_name(chapter_name)
-                chapter_path = part_path / chapter_folder
+        # Create metadata for each chapter
+        for part, part_data in folder_structure.items():
+            part_folder = self._sanitize_folder_name(part)
 
-                # Create metadata
+            for chapter, chunk_nums in part_data["chapters"].items():
+                chapter_folder = self._sanitize_folder_name(chapter)
+                chapter_path = output_path / part_folder / chapter_folder
+
+                # Get chunks for this chapter
+                chapter_chunk_list = chapter_chunks.get(chapter, [])
+
+                if not chapter_chunk_list:
+                    continue
+
+                # Calculate metadata
+                total_chunks = len(chapter_chunk_list)
+                total_characters = sum(c.char_count for c in chapter_chunk_list)
+                source_pages = sorted(set(c.source_page for c in chapter_chunk_list))
+
                 metadata = {
-                    "chapter": chapter_name,
-                    "part": part_name,
-                    "total_chunks": len(chapter_data["chunks"]),
-                    "total_characters": chapter_data["total_characters"],
-                    "source_pages": sorted(list(chapter_data["pages"])),
+                    "chapter": chapter,
+                    "part": part,
+                    "total_chunks": total_chunks,
+                    "total_characters": total_characters,
+                    "source_pages": source_pages,
                 }
 
-                # Save metadata
+                # Save metadata file
                 metadata_file = chapter_path / "metadata.json"
-                with open(metadata_file, "w", encoding="utf-8") as f:
-                    json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-                logger.debug(
-                    f"Created metadata for {chapter_name}: {len(chapter_data['chunks'])} chunks"
-                )
+                try:
+                    with open(metadata_file, "w", encoding="utf-8") as f:
+                        json.dump(metadata, f, indent=2, ensure_ascii=False)
+                except Exception as e:
+                    logger.error(f"Failed to save metadata for {chapter}: {e}")
 
     def _create_index_file(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: List[Any],
         output_path: Path,
         folder_structure: Dict[str, Any],
-        structure_metadata: Optional[Dict[str, Any]] = None,
+        chapters_config: Optional[List[Dict]] = None,
     ) -> str:
-        """
-        Create index.json file mapping entire document structure.
+        """Create root index.json file."""
+        total_characters = sum(chunk.char_count for chunk in chunks)
 
-        Args:
-            chunks: List of chunk dictionaries
-            output_path: Base output directory path
-            folder_structure: Folder structure dictionary
-            structure_metadata: Metadata from structure analysis
+        # Build structure for index
+        structure_data = []
 
-        Returns:
-            Path to index file
-        """
-        # Calculate totals
-        total_chunks = sum(
-            len(chapter_data["chunks"])
-            for part_data in folder_structure.values()
-            for chapter_data in part_data["chapters"].values()
-        )
+        for part, part_data in folder_structure.items():
+            part_entry = {"part": part, "chapters": []}
 
-        total_characters = sum(
-            chapter_data["total_characters"]
-            for part_data in folder_structure.values()
-            for chapter_data in part_data["chapters"].values()
-        )
-
-        # Build structure array
-        structure_array = []
-        for part_name, part_data in folder_structure.items():
-            part_entry = {"part": part_name, "chapters": []}
-
-            for chapter_name, chapter_data in part_data["chapters"].items():
-                chapter_folder = self._sanitize_folder_name(chapter_name)
-                part_folder = self._sanitize_folder_name(part_name)
-                chapter_path = f"{part_folder}/{chapter_folder}"
-
+            for chapter, chunk_nums in part_data["chapters"].items():
                 chapter_entry = {
-                    "name": chapter_name,
-                    "chunks": len(chapter_data["chunks"]),
-                    "characters": chapter_data["total_characters"],
-                    "pages": sorted(list(chapter_data["pages"])),
-                    "path": chapter_path,
+                    "name": chapter,
+                    "chunks": len(chunk_nums),
+                    "path": f"{self._sanitize_folder_name(part)}/{self._sanitize_folder_name(chapter)}",
                 }
-
                 part_entry["chapters"].append(chapter_entry)
 
-            structure_array.append(part_entry)
+            structure_data.append(part_entry)
 
-        # Create index
-        index = {
-            "source_pdf": (
-                structure_metadata.get("source_pdf", "unknown.pdf")
-                if structure_metadata
-                else "unknown.pdf"
-            ),
-            "total_chunks": total_chunks,
+        index_data = {
+            "source_pdf": "document.pdf",
+            "total_chunks": len(chunks),
             "total_characters": total_characters,
             "total_parts": len(folder_structure),
             "total_chapters": len(self._get_all_chapters(folder_structure)),
-            "structure": structure_array,
+            "structure": structure_data,
         }
 
-        # Save index
+        # Save index file
         index_file = output_path / "index.json"
-        with open(index_file, "w", encoding="utf-8") as f:
-            json.dump(index, f, indent=2, ensure_ascii=False)
 
-        logger.info(f"Created index file: {index_file}")
-        return str(index_file)
+        try:
+            with open(index_file, "w", encoding="utf-8") as f:
+                json.dump(index_data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Index file created: {index_file}")
+            return str(index_file)
+        except Exception as e:
+            logger.error(f"Failed to create index file: {e}")
+            return ""
 
     def _sanitize_folder_name(self, name: str) -> str:
-        """
-        Convert chapter/part name to safe folder name.
-
-        Args:
-            name: Original chapter/part name
-
-        Returns:
-            Sanitized folder name
-        """
-        # Remove special characters, keep alphanumeric, spaces, and hyphens
-        sanitized = re.sub(r"[^\w\s\-]", "", name)
-
+        """Convert folder name to safe format."""
         # Replace spaces with underscores
-        sanitized = re.sub(r"\s+", "_", sanitized)
-
-        # Remove leading/trailing underscores
-        sanitized = sanitized.strip("_")
-
-        # Limit length to 100 characters
-        sanitized = sanitized[:100]
+        sanitized = name.replace(" ", "_")
+        # Remove special characters
+        sanitized = "".join(c for c in sanitized if c.isalnum() or c in "_-")
+        # Remove multiple underscores
+        sanitized = "_".join(filter(None, sanitized.split("_")))
 
         return sanitized if sanitized else "Uncategorized"
 
     def _get_all_chapters(self, folder_structure: Dict[str, Any]) -> List[str]:
-        """
-        Get list of all chapters from folder structure.
-
-        Args:
-            folder_structure: Folder structure dictionary
-
-        Returns:
-            List of chapter names
-        """
+        """Get all chapter names from folder structure."""
         chapters = []
         for part_data in folder_structure.values():
             chapters.extend(part_data["chapters"].keys())
         return chapters
 
     def _count_chunks_by_chapter(
-        self, chunks: List[Dict[str, Any]], folder_structure: Dict[str, Any]
+        self,
+        chunks: List[Any],
+        folder_structure: Dict[str, Any],
     ) -> Dict[str, int]:
-        """
-        Count chunks by chapter.
-
-        Args:
-            chunks: List of chunk dictionaries
-            folder_structure: Folder structure dictionary
-
-        Returns:
-            Dictionary mapping chapter names to chunk counts
-        """
+        """Count chunks per chapter."""
         counts = {}
-        for part_data in folder_structure.values():
-            for chapter_name, chapter_data in part_data["chapters"].items():
-                counts[chapter_name] = len(chapter_data["chunks"])
+        for chunk in chunks:
+            chapter = chunk.source_chapter or "Unknown"
+            counts[chapter] = counts.get(chapter, 0) + 1
         return counts
 
-    def save_file_organization_report(
+
+class FileOrganizationPhase:
+    """Orchestrates the file organization phase of the pipeline."""
+
+    def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialize the file organization phase.
+
+        Args:
+            config: Configuration dictionary with output settings
+        """
+        self.config = config or {}
+        self.organizer = FileOrganizer(self.config)
+
+    def run(
+        self,
+        chunks: List[Any],
+        output_dir: str,
+        chapters_config: Optional[List[Dict]] = None,
+    ) -> FileOrganizationMetadata:
+        """
+        Run the file organization phase.
+
+        Args:
+            chunks: List of Chunk objects
+            output_dir: Base output directory
+            chapters_config: Optional list of chapter configurations
+
+        Returns:
+            FileOrganizationMetadata instance
+        """
+        logger.info("Starting file organization phase")
+        metadata = self.organizer.run(chunks, output_dir, chapters_config)
+        logger.info("File organization phase complete")
+        return metadata
+
+    def save_organization_report(
         self, metadata: FileOrganizationMetadata, output_path: str
     ) -> None:
         """
-        Save file organization report to JSON file.
+        Save file organization report to JSON.
 
         Args:
             metadata: FileOrganizationMetadata instance
-            output_path: Path to save report
+            output_path: Path to save the report
         """
         report = {
             "total_chunks_saved": metadata.total_chunks_saved,
@@ -383,7 +360,9 @@ class FileOrganizationPhase:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
-
-        logger.info(f"File organization report saved to: {output_path}")
+        try:
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
+            logger.info(f"Organization report saved to: {output_path}")
+        except Exception as e:
+            logger.error(f"Failed to save organization report: {e}")
