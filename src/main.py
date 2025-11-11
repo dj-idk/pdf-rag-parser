@@ -15,6 +15,7 @@ from src.phases.extraction import ExtractionPhase
 from src.phases.structure import StructurePhase
 from src.phases.cleaning import CleaningPhase
 from src.phases.chunking import ChunkingPhase
+from src.phases.file_organization import FileOrganizationPhase
 from src.utils.validators import validate_pdf_path, validate_output_dir
 
 
@@ -75,6 +76,8 @@ def configure_logging(verbose: bool = False) -> None:
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Verbose logging enabled")
+
+    config_path: Optional[str] = (None,)
 
 
 def run_pipeline(
@@ -230,16 +233,50 @@ def run_pipeline(
         logger.info(f"  Max chunk size: {chunking_metadata.max_chunk_size} chars")
         logger.info(f"  Split methods: {chunking_metadata.chunks_by_split_method}")
 
-        # TODO: Phase 5: File Organization
+        # Phase 5: File Organization
+        # Phase 5: File Organization
         logger.info("\n" + "=" * 60)
         logger.info("Phase 5: File Organization")
         logger.info("=" * 60)
-        logger.info("(To be implemented)")
 
-        logger.info("\n" + "=" * 60)
-        logger.info("Pipeline Complete!")
-        logger.info("=" * 60)
-        logger.info(f"Output saved to: {output_path}")
+        # Convert TextChunk objects to dictionaries for file organization phase
+        chunks_for_org = [
+            {
+                "content": chunk.content,
+                "chunk_id": chunk.chunk_id,
+                "page_num": chunk.source_page,
+                "part": "Uncategorized",  # Default part
+                "chapter": chunk.source_chapter or "Uncategorized",
+                "section": chunk.source_section or "Uncategorized",
+                "char_count": chunk.char_count,
+                "word_count": chunk.word_count,
+                "sentence_count": chunk.sentence_count,
+            }
+            for chunk in chunks
+        ]
+
+        # Convert StructureMetadata to dictionary for file organization phase
+        structure_metadata_dict = (
+            asdict(structure_metadata) if structure_metadata else None
+        )
+
+        file_org_phase = FileOrganizationPhase(asdict(config.output))
+        file_org_metadata = file_org_phase.run(
+            chunks_for_org, str(output_path), structure_metadata_dict
+        )
+
+        # Save file organization report
+        file_org_report_path = output_path / "file_organization_report.json"
+        file_org_phase.save_file_organization_report(
+            file_org_metadata, str(file_org_report_path)
+        )
+
+        logger.info(
+            f"✓ File organization complete: {file_org_metadata.total_chunks_saved} chunks organized"
+        )
+        logger.info(f"  Parts: {file_org_metadata.total_parts}")
+        logger.info(f"  Chapters: {file_org_metadata.total_chapters}")
+        logger.info(f"  Index file: {file_org_metadata.index_file_path}")
 
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=verbose)
