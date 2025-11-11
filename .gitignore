@@ -39,6 +39,7 @@ env/
 
 # Project-specific
 output/
+input/
 logs/
 *.pdf
 !sample.pdf

@@ -285,13 +285,13 @@ Create a `config.json` file to customize the pipeline:
 ### Basic Usage
 
 ```bash
-python src/main.py --input path/to/book.pdf --output output/
+python src.main.py --input path/to/book.pdf --output output/
 ```
 
 ### With Custom Configuration
 
 ```bash
-python src/main.py --input path/to/book.pdf --output output/ --config config.json
+python src.main.py --input path/to/book.pdf --output output/ --config config.json
 ```
 
 ### Command-Line Options
