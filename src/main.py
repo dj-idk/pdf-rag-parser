@@ -13,6 +13,7 @@ from dataclasses import asdict
 from src.config import ConfigManager
 from src.phases.extraction import ExtractionPhase
 from src.phases.structure import StructurePhase
+from src.phases.cleaning import CleaningPhase
 from src.utils.validators import validate_pdf_path, validate_output_dir
 
 
@@ -167,11 +168,27 @@ def run_pipeline(
         logger.info(f"  Sections: {structure_metadata.sections_found}")
         logger.info(f"  Method: {structure_metadata.structure_method}")
 
-        # TODO: Phase 3: Cleaning & Filtering
+        # Phase 3: Cleaning & Filtering
         logger.info("\n" + "=" * 60)
         logger.info("Phase 3: Cleaning & Filtering")
         logger.info("=" * 60)
-        logger.info("(To be implemented)")
+
+        cleaning_phase = CleaningPhase(asdict(config.cleaning))
+        cleaned_blocks, cleaning_metadata = cleaning_phase.run(
+            structured_blocks, structure_metadata
+        )
+
+        # Save cleaning report
+        cleaning_report_path = output_path / "cleaning_report.json"
+        cleaning_phase.save_cleaning_report(
+            cleaning_metadata, str(cleaning_report_path)
+        )
+
+        logger.info(
+            f"✓ Cleaning complete: {cleaning_metadata['total_blocks_after']} blocks remaining"
+        )
+        logger.info(f"  Blocks removed: {cleaning_metadata['blocks_removed']}")
+        logger.info(f"  Characters removed: {cleaning_metadata['characters_removed']}")
 
         # TODO: Phase 4: Smart Chunking
         logger.info("\n" + "=" * 60)
