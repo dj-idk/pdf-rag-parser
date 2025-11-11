@@ -14,6 +14,7 @@ from src.config import ConfigManager
 from src.phases.extraction import ExtractionPhase
 from src.phases.structure import StructurePhase
 from src.phases.cleaning import CleaningPhase
+from src.phases.chunking import ChunkingPhase
 from src.utils.validators import validate_pdf_path, validate_output_dir
 
 
@@ -190,11 +191,44 @@ def run_pipeline(
         logger.info(f"  Blocks removed: {cleaning_metadata['blocks_removed']}")
         logger.info(f"  Characters removed: {cleaning_metadata['characters_removed']}")
 
-        # TODO: Phase 4: Smart Chunking
+        # Phase 4: Smart Chunking
         logger.info("\n" + "=" * 60)
         logger.info("Phase 4: Smart Chunking")
         logger.info("=" * 60)
-        logger.info("(To be implemented)")
+
+        # Convert StructuredTextBlock objects to dictionaries for chunking phase
+        blocks_for_chunking = [
+            {
+                "content": block.content,
+                "page_num": block.page_num,
+                "chapter": block.parent_heading if block.hierarchy_level <= 1 else None,
+                "section": block.parent_heading if block.hierarchy_level > 1 else None,
+            }
+            for block in cleaned_blocks
+        ]
+
+        chunking_phase = ChunkingPhase(asdict(config.chunking))
+        chunks, chunking_metadata = chunking_phase.run(blocks_for_chunking)
+
+        # Save chunking report
+        chunking_report_path = output_path / "chunking_report.json"
+        chunking_phase.save_chunking_report(
+            chunking_metadata, str(chunking_report_path)
+        )
+
+        # Save chunks data
+        chunks_data_path = output_path / "chunks.json"
+        chunking_phase.save_chunks(chunks, str(chunks_data_path))
+
+        logger.info(
+            f"✓ Chunking complete: {chunking_metadata.total_chunks} chunks created"
+        )
+        logger.info(
+            f"  Average chunk size: {chunking_metadata.avg_chunk_size:.0f} chars"
+        )
+        logger.info(f"  Min chunk size: {chunking_metadata.min_chunk_size} chars")
+        logger.info(f"  Max chunk size: {chunking_metadata.max_chunk_size} chars")
+        logger.info(f"  Split methods: {chunking_metadata.chunks_by_split_method}")
 
         # TODO: Phase 5: File Organization
         logger.info("\n" + "=" * 60)
