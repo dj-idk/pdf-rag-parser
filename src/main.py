@@ -2,6 +2,7 @@
 Main entry point for the PDF RAG Parser pipeline.
 """
 
+import json
 import argparse
 import logging
 import sys
@@ -11,6 +12,7 @@ from dataclasses import asdict
 
 from src.config import ConfigManager
 from src.phases.extraction import ExtractionPhase
+from src.phases.structure import StructurePhase
 from src.utils.validators import validate_pdf_path, validate_output_dir
 
 
@@ -103,8 +105,17 @@ def run_pipeline(
     logger.info("Loading configuration...")
     config = ConfigManager.load_config(config_path)
 
-    # Create output directory
-    output_path = Path(output_dir)
+    # Get PDF filename without extension
+    pdf_filename = Path(input_pdf).stem
+
+    # Create output directory structure based on config
+    if config.output.output_dir and config.output.output_dir != "output/":
+        # Use custom output directory from config
+        output_path = Path(config.output.output_dir)
+    else:
+        # Use default: output_dir/pdf_filename/
+        output_path = Path(output_dir) / pdf_filename
+
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Save configuration to output
@@ -132,11 +143,29 @@ def run_pipeline(
         logger.info(f"  Total characters: {extraction_metadata.total_characters}")
         logger.info(f"  Total pages: {extraction_metadata.total_pages}")
 
-        # TODO: Phase 2: Structure Analysis
+        # Phase 2: Structure Analysis
         logger.info("\n" + "=" * 60)
         logger.info("Phase 2: Structure Analysis")
         logger.info("=" * 60)
-        logger.info("(To be implemented)")
+
+        structure_phase = StructurePhase(asdict(config.structure))
+        structured_blocks, structure_metadata = structure_phase.run(
+            text_blocks, extraction_metadata
+        )
+
+        # Save structure report
+        structure_report_path = output_path / "structure_report.json"
+        structure_phase.save_structure_report(
+            structure_metadata, str(structure_report_path)
+        )
+
+        logger.info(
+            f"✓ Structure analysis complete: {structure_metadata.classified_blocks} headings found"
+        )
+        logger.info(f"  Parts: {structure_metadata.parts_found}")
+        logger.info(f"  Chapters: {structure_metadata.chapters_found}")
+        logger.info(f"  Sections: {structure_metadata.sections_found}")
+        logger.info(f"  Method: {structure_metadata.structure_method}")
 
         # TODO: Phase 3: Cleaning & Filtering
         logger.info("\n" + "=" * 60)
@@ -159,7 +188,7 @@ def run_pipeline(
         logger.info("\n" + "=" * 60)
         logger.info("Pipeline Complete!")
         logger.info("=" * 60)
-        logger.info(f"Output saved to: {output_dir}")
+        logger.info(f"Output saved to: {output_path}")
 
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=verbose)

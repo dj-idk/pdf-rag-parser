@@ -106,6 +106,7 @@ This parser solves all of these problems.
 {
   "exclude_sections": ["Index", "Bibliography", "Appendix"],
   "exclude_patterns": ["[Pp]age \\d+", "^\\s*$"],
+  "exclude_pages": [1, 10, 120],
   "crop_top_percent": 0,
   "crop_bottom_percent": 5
 }
@@ -236,6 +237,7 @@ Create a `config.json` file to customize the pipeline:
   "cleaning": {
     "exclude_sections": ["Index", "Bibliography", "Appendix", "References"],
     "exclude_patterns": ["[Pp]age \\d+", "^\\s*$", "^\\s*-{3,}\\s*$"],
+    "exclude_pages": [1, 120, 1300],
     "crop_top_percent": 0,
     "crop_bottom_percent": 5,
     "crop_left_percent": 0,

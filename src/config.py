@@ -22,13 +22,19 @@ class ExtractionConfig:
 
 @dataclass
 class StructureConfig:
-    """Configuration for the structure analysis phase."""
+    """Configuration for structure analysis phase."""
 
     use_bookmarks: bool = True
     use_heuristics: bool = True
     use_regex: bool = True
     font_size_threshold: float = 14.0
     heading_isolation_threshold: float = 0.7
+
+    # Regex patterns for structure detection
+    part_pattern: str = r"^(?:Part|PART)\s+([IVX]+|[0-9]+)[\s:]*(.*)$"
+    chapter_pattern: str = r"^(?:Chapter|CHAPTER)\s+([0-9]+)[\s:]*(.*)$"
+    section_pattern: str = r"^([0-9]+\.[0-9]+)\s+(.*)$"
+    subsection_pattern: str = r"^([0-9]+\.[0-9]+\.[0-9]+)\s+(.*)$"
 
 
 @dataclass
@@ -37,6 +43,7 @@ class CleaningConfig:
 
     exclude_sections: list = None
     exclude_patterns: list = None
+    exclude_pages: list = None
     crop_top_percent: float = 0.0
     crop_bottom_percent: float = 5.0
     crop_left_percent: float = 0.0
@@ -48,6 +55,8 @@ class CleaningConfig:
             self.exclude_sections = ["Index", "Bibliography", "Appendix", "References"]
         if self.exclude_patterns is None:
             self.exclude_patterns = [r"[Pp]age \d+", r"^\s*$", r"^\s*-{3,}\s*$"]
+        if self.exclude_pages is None:
+            self.exclude_pages = []
 
 
 @dataclass

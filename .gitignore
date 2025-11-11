@@ -41,6 +41,7 @@ env/
 output/
 input/
 logs/
+configs/
 *.pdf
 !sample.pdf
 .env
